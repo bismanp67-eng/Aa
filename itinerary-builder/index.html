@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Itinerary Builder</title>
+<style>
+  :root {
+    --bg: #f4f6fa;
+    --panel: #ffffff;
+    --text: #1e293b;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --accent: #2563eb;
+    --danger: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { padding: 7px 12px; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: var(--danger); }
+  input, select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  header.top { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  .brand { font-weight: 700; font-size: 17px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .trip-head { display: grid; grid-template-columns: 2fr 1.2fr 1.2fr 1fr 0.8fr; gap: 10px; padding: 16px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .trip-head label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+
+  .layout { display: grid; grid-template-columns: 240px 1fr; gap: 18px; padding: 18px 20px; align-items: start; }
+  .palette { position: sticky; top: 90px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .palette h3 { margin: 0 0 10px; font-size: 14px; }
+  .hint { font-size: 12px; color: var(--muted); margin: 12px 0 0; }
+  .chip { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px; margin-bottom: 8px; text-align: left; border-left: 4px solid var(--c); cursor: grab; }
+
+  .summary { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 14px; color: var(--muted); }
+  .summary strong { color: var(--text); }
+
+  #days { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
+  .day { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; min-height: 180px; }
+  .day header { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; margin-bottom: 8px; }
+  .day-no { font-size: 12px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .03em; }
+  .day-title { border: none; padding: 2px 0; font-weight: 600; font-size: 16px; background: transparent; }
+  .day-title:focus { outline: none; border-bottom: 1px solid var(--accent); border-radius: 0; }
+  .day-actions { display: flex; gap: 4px; }
+  .day-actions button { padding: 4px 8px; font-size: 12px; }
+
+  .items { flex: 1; min-height: 80px; border-radius: 8px; }
+  .items.empty-zone { background: repeating-linear-gradient(45deg, transparent 0 8px, rgba(100,116,139,.06) 8px 16px); }
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 22px 8px; border: 1px dashed var(--line); border-radius: 8px; margin: 0; }
+
+  .card { position: relative; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--c); border-radius: 10px; margin-bottom: 8px; cursor: grab; overflow: hidden; }
+  .card.dragging { opacity: .4; }
+  .card img { display: block; width: 100%; height: 130px; object-fit: cover; }
+  .card-body { padding: 9px 11px 4px; cursor: pointer; }
+  .meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); }
+  .badge { color: var(--c); font-weight: 600; }
+  .ttl { font-weight: 600; margin-top: 2px; }
+  .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .desc { font-size: 13px; margin-top: 4px; white-space: pre-line; }
+  .price { font-size: 13px; font-weight: 600; margin-top: 4px; }
+  .card-tools { display: flex; gap: 4px; padding: 6px 8px 8px; }
+  .card-tools button { padding: 3px 8px; font-size: 12px; }
+  .drop-line { height: 4px; margin: 4px 0; background: var(--accent); border-radius: 2px; }
+  .add-item { margin-top: 6px; width: 100%; border-style: dashed; color: var(--muted); }
+
+  dialog { width: min(600px, 94vw); border: none; border-radius: 14px; padding: 0; background: var(--panel); color: var(--text); }
+  dialog::backdrop { background: rgba(15, 23, 42, .45); }
+  dialog form { padding: 20px; }
+  dialog h2 { margin: 0 0 14px; font-size: 18px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid2 label { display: block; font-size: 13px; color: var(--muted); }
+  .grid2 label input, .grid2 label select, .grid2 label textarea { margin-top: 4px; color: var(--text); }
+  .full { grid-column: 1 / -1; }
+  .img-field { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .img-field label.file { flex: 1; min-width: 160px; }
+  #preview { width: 100%; max-height: 160px; object-fit: cover; border-radius: 8px; }
+  dialog footer { display: flex; gap: 8px; align-items: center; margin-top: 18px; }
+  .spacer { flex: 1; }
+
+  .print-only { display: none; }
+
+  @media (max-width: 860px) {
+    .trip-head { grid-template-columns: 1fr 1fr; }
+    .layout { grid-template-columns: 1fr; }
+    .palette { position: static; }
+    #palette { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip { width: auto; margin-bottom: 0; }
+  }
+
+  @media print {
+    body { background: #fff; }
+    .no-print { display: none !important; }
+    .print-only { display: block; margin-bottom: 14px; }
+    .layout { display: block; padding: 0; }
+    .trip-head { border: none; background: none; padding: 0 0 10px; }
+    #days { display: block; }
+    .day { border: none; border-bottom: 1px solid var(--line); border-radius: 0; padding: 10px 0; break-inside: avoid; }
+    .card { break-inside: avoid; border-radius: 6px; margin-bottom: 6px; }
+    .card img { height: 110px; }
+    .summary { color: #000; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top no-print">
+  <div class="brand">🧭 Itinerary Builder</div>
+  <div class="actions">
+    <button id="btnSample" type="button">Load sample</button>
+    <button id="btnImport" type="button">Import JSON</button>
+    <button id="btnExport" type="button">Export JSON</button>
+    <button id="btnPrint" type="button" class="primary">Print / Save PDF</button>
+    <input id="fileImport" type="file" accept="application/json" hidden>
+  </div>
+</header>
+
+<section class="trip-head no-print">
+  <div>
+    <label for="title">Trip title</label>
+    <input id="title" placeholder="e.g. Bali Honeymoon · 5 nights">
+  </div>
+  <div>
+    <label for="client">Client</label>
+    <input id="client" placeholder="Client name">
+  </div>
+  <div>
+    <label for="agency">Agency</label>
+    <input id="agency" placeholder="Your agency name">
+  </div>
+  <div>
+    <label for="startDate">Start date</label>
+    <input id="startDate" type="date">
+  </div>
+  <div>
+    <label for="currency">Currency</label>
+    <select id="currency"></select>
+  </div>
+</section>
+
+<div class="print-only">
+  <h1 id="pTitle" style="margin:0 0 4px; font-size:22px;"></h1>
+  <div id="pMeta" style="color:#555;"></div>
+</div>
+
+<div class="layout">
+  <aside class="palette no-print">
+    <h3>Drag onto a day</h3>
+    <div id="palette"></div>
+    <p class="hint">Click a block to add it to the first day. Drag cards to reorder or move them between days. On phones, use ↑ ↓ on each card.</p>
+  </aside>
+
+  <main>
+    <div class="summary">
+      <div><strong id="dayCount">0</strong> days · <strong id="itemCount">0</strong> items · Total <strong id="total">0</strong></div>
+      <button id="btnAddDay" type="button" class="no-print">+ Add day</button>
+    </div>
+    <div id="days"></div>
+  </main>
+</div>
+
+<dialog id="editor">
+  <form id="form" autocomplete="off">
+    <h2 id="editorTitle">Add item</h2>
+    <div class="grid2">
+      <label>Type
+        <select name="type" id="typeSelect"></select>
+      </label>
+      <label>Day
+        <select name="dayId"></select>
+      </label>
+      <label class="full">Title
+        <input name="title" placeholder="e.g. Airport pickup">
+      </label>
+      <label>Time
+        <input name="time" type="time">
+      </label>
+      <label>Price
+        <input name="price" type="number" min="0" step="0.01" placeholder="0">
+      </label>
+      <label class="full">Location
+        <input name="location" placeholder="Hotel, city or meeting point">
+      </label>
+      <label class="full">Description
+        <textarea name="description" rows="3" placeholder="Details, booking reference, inclusions…"></textarea>
+      </label>
+      <div class="full img-field">
+        <label style="flex:2; min-width:200px;">Image URL
+          <input name="imageUrl" placeholder="https://…">
+        </label>
+        <label class="file">or upload a photo
+          <input name="imageFile" type="file" accept="image/*">
+        </label>
+        <button type="button" id="clearImage">Remove image</button>
+        <img id="preview" alt="" hidden>
+      </div>
+    </div>
+    <footer>
+      <button type="button" id="deleteItem" class="danger">Delete</button>
+      <span class="spacer"></span>
+      <button type="button" id="cancelEdit">Cancel</button>
+      <button type="submit" class="primary">Save</button>
+    </footer>
+  </form>
+</dialog>
+
+<script>
+const TYPES = {
+  flight:   { label: 'Flight',           icon: '✈️', color: '#2563eb' },
+  hotel:    { label: 'Hotel',            icon: '🏨', color: '#7c3aed' },
+  transfer: { label: 'Transfer',         icon: '🚐', color: '#0891b2' },
+  tour:     { label: 'Tour / Activity',  icon: '🗺️', color: '#16a34a' },
+  meal:     { label: 'Meal',             icon: '🍽️', color: '#ea580c' },
+  free:     { label: 'Free time',        icon: '🌴', color: '#64748b' },
+  note:     { label: 'Note',             icon: '📝', color: '#ca8a04' },
+};
+const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'BDT', 'AED', 'SGD', 'THB', 'LKR'];
+const KEY = 'itinerary-builder:v1';
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+function newItem(type = 'tour') {
+  return { id: uid(), type, title: TYPES[type].label, time: '', location: '', description: '', image: '', price: 0 };
+}
+
+function sampleTrip() {
+  const day = (title, items) => ({ id: uid(), title, items: items.map(it => Object.assign(newItem(it.type), it)) });
+  return {
+    title: 'Bali Honeymoon · 3 days',
+    client: 'Mr. & Mrs. Sharma',
+    agency: 'Your Travel Co.',
+    startDate: '',
+    currency: 'USD',
+    days: [
+      day('Arrival in Ubud', [
+        { type: 'transfer', title: 'Airport pickup', time: '10:30', location: 'Ngurah Rai Airport', price: 40, description: 'Private car with driver to hotel' },
+        { type: 'meal', title: 'Lunch at Locavore', time: '13:00', location: 'Ubud', price: 35, description: 'Set menu' },
+        { type: 'hotel', title: 'Check-in · Pool villa', time: '14:00', location: 'Ubud', price: 0, description: 'Breakfast included' },
+      ]),
+      day('Ubud exploration', [
+        { type: 'tour', title: 'Rice terrace trek', time: '08:00', location: 'Tegallalang', price: 25, description: 'Guided, about 3 hours' },
+        { type: 'tour', title: 'Monkey Forest visit', time: '11:00', location: 'Ubud', price: 15 },
+        { type: 'meal', title: 'Dinner at Bebek Bengil', time: '19:00', location: 'Ubud', price: 30 },
+      ]),
+      day('Free day', [
+        { type: 'free', title: 'Free time at leisure', time: '09:00' },
+        { type: 'note', title: 'Spa booked for 16:00', time: '16:00', description: 'Confirm with the spa 24 hours before' },
+      ]),
+    ],
+  };
+}
+
+let trip = load() || sampleTrip();
+let drag = null;   // { kind: 'new', type } or { kind: 'move', itemId }
+let edit = { itemId: null, image: '' };
+
+function load() {
+  try {
+    const t = JSON.parse(localStorage.getItem(KEY));
+    return t && Array.isArray(t.days) ? t : null;
+  } catch { return null; }
+}
+
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(trip)); }
+  catch { alert('Browser storage is full. Export JSON to keep a copy, then remove some large images.'); }
+}
+
+function changed() { save(); render(); }
+
+const findDay = id => trip.days.find(d => d.id === id);
+function findItem(id) {
+  for (const day of trip.days) {
+    const item = day.items.find(i => i.id === id);
+    if (item) return { day, item };
+  }
+  return null;
+}
+
+function dayLabel(i) {
+  let s = `Day ${i + 1}`;
+  if (trip.startDate) {
+    const d = new Date(trip.startDate + 'T00:00');
+    if (!isNaN(d)) {
+      d.setDate(d.getDate() + i);
+      s += ' · ' + d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+    }
+  }
+  return s;
+}
+
+function money(n) {
+  try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: trip.currency }).format(n || 0); }
+  catch { return (n || 0).toFixed(2) + ' ' + trip.currency; }
+}
+
+function render() {
+  document.title = trip.title ? trip.title + ' · Itinerary' : 'Itinerary Builder';
+  $('#pTitle').textContent = trip.title || 'Travel Itinerary';
+  $('#pMeta').textContent = [trip.client, trip.agency, trip.startDate && 'Starts ' + trip.startDate].filter(Boolean).join(' · ');
+  renderPalette();
+  renderDays();
+  renderSummary();
+}
+
+function renderPalette() {
+  $('#palette').innerHTML = Object.entries(TYPES).map(([key, t]) =>
+    `<button type="button" class="chip" draggable="true" data-type="${key}" style="--c:${t.color}">
+       <span>${t.icon}</span><span>${t.label}</span>
+     </button>`).join('');
+}
+
+function renderDays() {
+  $('#days').innerHTML = trip.days.map((day, i) => `
+    <article class="day">
+      <header>
+        <div>
+          <div class="day-no">${esc(dayLabel(i))}</div>
+          <input class="day-title" data-day-title="${day.id}" value="${esc(day.title)}" placeholder="Day title">
+        </div>
+        <div class="day-actions no-print">
+          <button type="button" data-action="sort-day" data-day="${day.id}" title="Sort items by time">Sort</button>
+          <button type="button" data-action="del-day" data-day="${day.id}" title="Delete day">🗑</button>
+        </div>
+      </header>
+      <div class="items" data-drop-day="${day.id}">
+        ${day.items.map(cardHtml).join('') || '<p class="empty">Drag activities here</p>'}
+      </div>
+      <button type="button" class="add-item no-print" data-action="add-item" data-day="${day.id}">+ Add item</button>
+    </article>`).join('') || '<p class="empty">No days yet. Click “+ Add day”.</p>';
+}
+
+function cardHtml(it) {
+  const t = TYPES[it.type] || TYPES.note;
+  return `
+    <div class="card" draggable="true" data-item="${it.id}" style="--c:${t.color}">
+      ${it.image ? `<img src="${esc(it.image)}" alt="" loading="lazy">` : ''}
+      <div class="card-body" data-action="edit" data-item="${it.id}">
+        <div class="meta"><span class="badge">${t.icon} ${t.label}</span><span>${esc(it.time)}</span></div>
+        <div class="ttl">${esc(it.title)}</div>
+        ${it.location ? `<div class="sub">📍 ${esc(it.location)}</div>` : ''}
+        ${it.description ? `<div class="desc">${esc(it.description)}</div>` : ''}
+        ${it.price ? `<div class="price">${money(it.price)}</div>` : ''}
+      </div>
+      <div class="card-tools no-print">
+        <button type="button" data-action="up" data-item="${it.id}" title="Move up">↑</button>
+        <button type="button" data-action="down" data-item="${it.id}" title="Move down">↓</button>
+        <button type="button" data-action="dup" data-item="${it.id}" title="Duplicate">⧉</button>
+        <button type="button" data-action="edit" data-item="${it.id}" title="Edit">✎ Edit</button>
+      </div>
+    </div>`;
+}
+
+function renderSummary() {
+  const items = trip.days.flatMap(d => d.items);
+  const total = items.reduce((s, i) => s + (Number(i.price) || 0), 0);
+  $('#dayCount').textContent = trip.days.length;
+  $('#itemCount').textContent = items.length;
+  $('#total').textContent = money(total);
+}
+
+function setHeader() {
+  $('#title').value = trip.title || '';
+  $('#client').value = trip.client || '';
+  $('#agency').value = trip.agency || '';
+  $('#startDate').value = trip.startDate || '';
+  $('#currency').value = trip.currency || 'USD';
+}
+
+// ---------- Actions (buttons on days and cards) ----------
+$('#days').addEventListener('click', e => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  const { action, day: dayId, item: itemId } = btn.dataset;
+
+  if (action === 'add-item') return openEditor({ dayId, type: 'tour' });
+  if (action === 'edit') return openEditor({ itemId, dayId: findItem(itemId)?.day.id });
+
+  if (action === 'dup') {
+    const { day, item } = findItem(itemId);
+    day.items.splice(day.items.indexOf(item) + 1, 0, { ...item, id: uid() });
+    return changed();
+  }
+  if (action === 'up' || action === 'down') {
+    const { day, item } = findItem(itemId);
+    const idx = day.items.indexOf(item);
+    const to = action === 'up' ? idx - 1 : idx + 1;
+    if (to < 0 || to >= day.items.length) return;
+    [day.items[idx], day.items[to]] = [day.items[to], day.items[idx]];
+    return changed();
+  }
+  if (action === 'sort-day') {
+    findDay(dayId).items.sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
+    return changed();
+  }
+  if (action === 'del-day') {
+    const day = findDay(dayId);
+    if (!confirm(`Delete this day and its ${day.items.length} item(s)?`)) return;
+    trip.days = trip.days.filter(d => d !== day);
+    return changed();
+  }
+});
+
+$('#days').addEventListener('change', e => {
+  if (!e.target.matches('[data-day-title]')) return;
+  findDay(e.target.dataset.dayTitle).title = e.target.value;
+  changed();
+});
+
+$('#btnAddDay').addEventListener('click', () => {
+  trip.days.push({ id: uid(), title: '', items: [] });
+  changed();
+});
+
+// ---------- Drag and drop ----------
+$('#palette').addEventListener('click', e => {
+  const chip = e.target.closest('.chip');
+  if (!chip) return;
+  if (!trip.days.length) return alert('Add a day first.');
+  openEditor({ dayId: trip.days[0].id, type: chip.dataset.type });
+});
+
+document.addEventListener('dragstart', e => {
+  const chip = e.target.closest('.chip');
+  const card = e.target.closest('.card');
+  if (chip) drag = { kind: 'new', type: chip.dataset.type };
+  else if (card) { drag = { kind: 'move', itemId: card.dataset.item }; card.classList.add('dragging'); }
+  else return;
+  e.dataTransfer.effectAllowed = 'copyMove';
+  e.dataTransfer.setData('text/plain', 'itinerary'); // Firefox needs data to start a drag
+});
+
+document.addEventListener('dragend', () => {
+  drag = null;
+  document.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+  clearDropLines();
+});
+
+function indexAt(list, y) {
+  const cards = [...list.querySelectorAll('.card:not(.dragging)')];
+  const i = cards.findIndex(c => {
+    const r = c.getBoundingClientRect();
+    return y < r.top + r.height / 2;
+  });
+  return i < 0 ? cards.length : i;
+}
+
+function placeDropLine(list, index) {
+  clearDropLines();
+  const line = document.createElement('div');
+  line.className = 'drop-line';
+  const cards = list.querySelectorAll('.card:not(.dragging)');
+  list.insertBefore(line, cards[index] || null);
+}
+
+function clearDropLines() {
+  document.querySelectorAll('.drop-line').forEach(el => el.remove());
+}
+
+document.addEventListener('dragover', e => {
+  const list = e.target.closest('[data-drop-day]');
+  if (!list || !drag) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = drag.kind === 'new' ? 'copy' : 'move';
+  placeDropLine(list, indexAt(list, e.clientY));
+});
+
+document.addEventListener('drop', e => {
+  const list = e.target.closest('[data-drop-day]');
+  if (!list || !drag) return;
+  e.preventDefault();
+  const index = indexAt(list, e.clientY);
+  const target = findDay(list.dataset.dropDay);
+  clearDropLines();
+
+  if (drag.kind === 'new') {
+    const item = newItem(drag.type);
+    target.items.splice(index, 0, item);
+    changed();
+    return openEditor({ itemId: item.id, dayId: target.id });
+  }
+
+  const found = findItem(drag.itemId);
+  if (!found) return;
+  found.day.items.splice(found.day.items.indexOf(found.item), 1);   // remove first, so index matches the list without it
+  target.items.splice(index, 0, found.item);
+  changed();
+});
+
+// ---------- Editor dialog ----------
+function openEditor({ itemId = null, dayId, type = 'tour' }) {
+  const f = $('#form');
+  const found = itemId ? findItem(itemId) : null;
+  const item = found ? found.item : newItem(type);
+
+  edit = { itemId, image: item.image && item.image.startsWith('data:') ? item.image : '' };
+
+  f.reset();
+  f.elements.type.value = item.type;
+  f.elements.title.value = found ? item.title : '';
+  f.elements.title.placeholder = TYPES[item.type].label;
+  f.elements.time.value = item.time || '';
+  f.elements.price.value = item.price || '';
+  f.elements.location.value = item.location || '';
+  f.elements.description.value = item.description || '';
+  f.elements.imageUrl.value = edit.image ? '' : (item.image || '');
+  f.elements.dayId.innerHTML = trip.days.map((d, i) =>
+    `<option value="${d.id}">${esc(dayLabel(i))}${d.title ? ' – ' + esc(d.title) : ''}</option>`).join('');
+  f.elements.dayId.value = found ? found.day.id : dayId;
+
+  setPreview(edit.image || item.image || '');
+  $('#editorTitle').textContent = found ? 'Edit item' : 'Add item';
+  $('#deleteItem').hidden = !found;
+  $('#editor').showModal();
+  f.elements.title.focus();
+}
+
+function setPreview(src) {
+  const img = $('#preview');
+  img.src = src || '';
+  img.hidden = !src;
+}
+
+function shrinkImage(file) {
+  // Resize to max 900px wide so localStorage and printed files stay small.
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const scale = Math.min(1, 900 / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+$('#form').elements.imageFile.addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  edit.image = await shrinkImage(file);
+  $('#form').elements.imageUrl.value = '';
+  setPreview(edit.image);
+});
+
+$('#form').elements.imageUrl.addEventListener('input', e => {
+  edit.image = '';
+  $('#form').elements.imageFile.value = '';
+  setPreview(e.target.value.trim());
+});
+
+$('#clearImage').addEventListener('click', () => {
+  edit.image = '';
+  $('#form').elements.imageUrl.value = '';
+  $('#form').elements.imageFile.value = '';
+  setPreview('');
+});
+
+$('#form').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target.elements;
+  const type = f.type.value;
+  const data = {
+    type,
+    title: f.title.value.trim() || TYPES[type].label,
+    time: f.time.value,
+    location: f.location.value.trim(),
+    price: Number(f.price.value) || 0,
+    description: f.description.value.trim(),
+    image: edit.image || f.imageUrl.value.trim(),
+  };
+
+  if (edit.itemId && findItem(edit.itemId)) {
+    const { day, item } = findItem(edit.itemId);
+    Object.assign(item, data);
+    if (day.id !== f.dayId.value) {   // moved to another day via the form: append to the end
+      day.items.splice(day.items.indexOf(item), 1);
+      findDay(f.dayId.value).items.push(item);
+    }
+  } else {
+    const item = { ...newItem(type), ...data, id: edit.itemId || uid() };
+    findDay(f.dayId.value).items.push(item);
+  }
+  $('#editor').close();
+  changed();
+});
+
+$('#deleteItem').addEventListener('click', () => {
+  const found = findItem(edit.itemId);
+  if (!found || !confirm('Delete this item?')) return;
+  found.day.items = found.day.items.filter(i => i !== found.item);
+  $('#editor').close();
+  changed();
+});
+
+$('#cancelEdit').addEventListener('click', () => $('#editor').close());
+
+// ---------- Header ----------
+['title', 'client', 'agency'].forEach(key => {
+  $('#' + key).addEventListener('input', e => { trip[key] = e.target.value; save(); });
+});
+$('#title').addEventListener('change', render);
+$('#startDate').addEventListener('change', e => { trip.startDate = e.target.value; changed(); });
+$('#currency').addEventListener('change', e => { trip.currency = e.target.value; changed(); });
+
+// ---------- Toolbar ----------
+$('#btnSample').addEventListener('click', () => {
+  if (trip.days.some(d => d.items.length) && !confirm('Replace the current trip with the sample?')) return;
+  trip = sampleTrip();
+  setHeader();
+  changed();
+});
+
+$('#btnPrint').addEventListener('click', () => window.print());
+
+$('#btnExport').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(trip, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (trip.title || 'itinerary').toLowerCase().replace(/[^\w]+/g, '-') + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+
+$('#btnImport').addEventListener('click', () => $('#fileImport').click());
+
+$('#fileImport').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (!Array.isArray(data.days) || !data.days.every(d => Array.isArray(d.items))) throw new Error('bad shape');
+    trip = data;
+    setHeader();
+    changed();
+  } catch {
+    alert('That file is not a valid itinerary JSON.');
+  }
+});
+
+// ---------- Init ----------
+$('#currency').innerHTML = CURRENCIES.map(c => `<option>${c}</option>`).join('');
+$('#typeSelect').innerHTML = Object.entries(TYPES).map(([k, t]) => `<option value="${k}">${t.icon} ${t.label}</option>`).join('');
+setHeader();
+render();
+</script>
+</body>
+</html>
