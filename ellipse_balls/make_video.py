@@ -123,18 +123,23 @@ class Phase:
         self.meet = self.t0 + TRAVEL
         self.hit_t = self.t0 + inv_ease(self.d1 / (2 * A)) * TRAVEL
         self.r = 15.0 * n ** -0.17
+        self.sub = (np.arange(n) if n <= DRAW_MAX else
+                    np.sort(np.random.default_rng(k).choice(n, DRAW_MAX, replace=False)))
 
-    def pos(self, t):
+    def pos(self, t, sub=None):
         u = np.clip((t - self.t0) / TRAVEL, 0, 1)
         s = ease_np(u) * 2 * A
-        if np.ndim(s) == 0:
-            s = np.full(self.n, s)
-        before = s <= self.d1
-        p1 = self.src + self.dir * s[:, None]
-        p2 = self.p + self.dir2 * (s - self.d1)[:, None]
+        d1, dr, p, dr2 = self.d1, self.dir, self.p, self.dir2
+        if sub is not None:
+            d1, dr, p, dr2 = d1[sub], dr[sub], p[sub], dr2[sub]
+        s = np.full(len(d1), s)
+        before = s <= d1
+        p1 = self.src + dr * s[:, None]
+        p2 = p + dr2 * (s - d1)[:, None]
         return np.where(before[:, None], p1, p2), s
 
 
+DRAW_MAX = 131072
 PH = [Phase(k) for k in range(PHASES)]
 RNG = np.random.default_rng(7)
 STARS = np.column_stack([RNG.uniform(0, W, 140), RNG.uniform(0, H, 140),
@@ -388,19 +393,20 @@ FIN_COL = colours(4096)[(FIN_ANG / (2 * np.pi) * 4096).astype(int) % 4096].astyp
 
 
 def splat_points(buf, xy, col, w):
-    """bilinear additive splat of points into float HxWx3 buffer"""
+    """additive splat of points into float HxWx3 buffer (one bincount per channel)"""
     x, y = xy[:, 0], xy[:, 1]
     ok = (x >= 0) & (x < W - 1) & (y >= 0) & (y < H - 1)
-    x, y, col = x[ok], y[ok], col[ok]
-    w = w[ok] if np.ndim(w) else np.full(len(x), w, np.float32)
-    x0, y0 = x.astype(np.int32), y.astype(np.int32)
-    fx, fy = x - x0, y - y0
+    w = (w[ok] if np.ndim(w) else np.float32(w))
+    idx = y[ok].astype(np.int32) * W + x[ok].astype(np.int32)
+    col = col[ok]
     flat = buf.reshape(-1, 3)
-    for dx, dy, ww in ((0, 0, (1 - fx) * (1 - fy)), (1, 0, fx * (1 - fy)),
-                       (0, 1, (1 - fx) * fy), (1, 1, fx * fy)):
-        idx = (y0 + dy) * W + (x0 + dx)
-        for c in range(3):
-            flat[:, c] += np.bincount(idx, weights=ww * w * col[:, c], minlength=W * H)
+    for c in range(3):
+        flat[:, c] += np.bincount(idx, weights=col[:, c] * w, minlength=W * H)
+
+
+# at most this many points are drawn per sample; above it a fixed random subset
+# is drawn with proportionally more weight (looks identical, ~10x faster)
+DRAW_MAX = 131072
 
 
 def splat_layer(t):
@@ -425,20 +431,26 @@ def splat_layer(t):
     base = 255 * min(1.0, 1200 / ph.n)
     if tau < TRAVEL:
         steps = 16
+        sub = ph.sub
+        xs, cs, ws = [], [], []
         for j in range(steps):
-            xy, _ = ph.pos(t - j * 0.0035)
-            splat_points(buf, xy, ph.col, base * (1 - j / steps) ** 1.5)
+            xy, _ = ph.pos(t - j * 0.0035, sub)
+            xs.append(xy)
+            cs.append(ph.col[sub])
+            ws.append(np.full(len(sub), base * ph.n / len(sub) * (1 - j / steps) ** 1.5, np.float32))
+        splat_points(buf, np.concatenate(xs), np.concatenate(cs), np.concatenate(ws))
     else:
-        splat_points(buf, ph.pos(t)[0], ph.col, base)
+        splat_points(buf, ph.pos(t, ph.sub)[0], ph.col[ph.sub], base * ph.n / len(ph.sub))
     # wall flashes where balls bounce
     for p in PH[max(0, k - 1):k + 1]:
         if p.n <= SPLAT_N:
             continue
-        dt = t - p.hit_t
+        dt = t - p.hit_t[p.sub]
         m = (dt >= 0) & (dt < 0.5)
         if m.any():
-            splat_points(buf, p.p[m], p.col[m],
-                         (255 * min(1.0, 8000 / p.n) * 1.5 * np.exp(-dt[m] * 7)).astype(np.float32))
+            sc = p.n / len(p.sub)
+            splat_points(buf, p.p[p.sub][m], p.col[p.sub][m],
+                         (255 * min(1.0, 8000 / p.n) * 1.5 * sc * np.exp(-dt[m] * 7)).astype(np.float32))
     return buf
 
 
